@@ -13,3 +13,4 @@
 
 # testing bootnode local dbs
 *.db
+start.sh
