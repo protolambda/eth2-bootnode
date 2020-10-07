@@ -148,7 +148,7 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 
 	// Close API server
 	if srv != nil {
-		ctx, _ := context.WithTimeout(ctx, time.Second*5)
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Error("Server shutdown failed", "err", err)
 		}
