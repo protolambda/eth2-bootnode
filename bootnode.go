@@ -10,7 +10,6 @@ import (
 	"github.com/protolambda/ask"
 	"github.com/protolambda/rumor/control/actor/flags"
 	"github.com/protolambda/rumor/p2p/addrutil"
-	"github.com/protolambda/rumor/p2p/types"
 	"github.com/protolambda/zrnt/eth2/beacon"
 	"io"
 	"net"
@@ -29,7 +28,7 @@ type BootnodeCmd struct {
 	ListenUDP   uint16               `ask:"--listen-udp" help:"Listen UDP port. Will try ENR port otherwise."`
 	APIAddr     string               `ask:"--api-addr" help:"Address to bind HTTP API server to. API is disabled if empty."`
 	NodeDBPath  string               `ask:"--node-db" help:"Path to dv5 node DB. Memory DB if empty."`
-	Attnets     types.AttnetBits     `ask:"--attnets" help:"Attnet bitfield, as bytes."`
+	Attnets     beacon.AttnetBits    `ask:"--attnets" help:"Attnet bitfield, as bytes."`
 	Bootnodes   []string             `ask:"--bootnodes" help:"Optionally befriend other bootnodes"`
 	ForkVersion beacon.Version       `ask:"--fork-version" help:"Eth2 fork version"`
 	Color       bool                 `ask:"--color" help:"Log with colors"`
@@ -85,7 +84,7 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 	}
 	localNode.Set(addrutil.NewAttnetsENREntry(&c.Attnets))
 
-	localNode.Set(addrutil.NewEth2DataEntry(&types.Eth2Data{
+	localNode.Set(addrutil.NewEth2DataEntry(&beacon.Eth2Data{
 		ForkDigest:      beacon.ComputeForkDigest(c.ForkVersion, beacon.Root{}),
 		NextForkVersion: c.ForkVersion,
 		NextForkEpoch:   ^beacon.Epoch(0),
