@@ -2,8 +2,11 @@
 
 Minimal bootnode utility, with ENR options, geth discv5 logging, and persisted local node DB. 
 
+And a minimal HTTP endpoint, to serve the local ENR, in common base64 ENR representation, on the `/enr` route.
+
 Options:
 ```
+      --api-addr string        Address to bind HTTP API server to. API is disabled if empty. (default "0.0.0.0:8000")
       --attnets bytes8         Attnet bitfield, as bytes. (default 0000000000000000)
       --bootnodes strings      Optionally befriend other bootnodes
       --color                  Log with colors (default true)

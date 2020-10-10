@@ -10,12 +10,14 @@ import (
 	"github.com/protolambda/ask"
 	"github.com/protolambda/rumor/control/actor/flags"
 	"github.com/protolambda/rumor/p2p/addrutil"
-	"github.com/protolambda/rumor/p2p/types"
 	"github.com/protolambda/zrnt/eth2/beacon"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type BootnodeCmd struct {
@@ -24,8 +26,9 @@ type BootnodeCmd struct {
 	ENRUDP      uint16               `ask:"--enr-udp" help:"UDP port to put in ENR"`
 	ListenIP    net.IP               `ask:"--listen-ip" help:"Listen IP."`
 	ListenUDP   uint16               `ask:"--listen-udp" help:"Listen UDP port. Will try ENR port otherwise."`
+	APIAddr     string               `ask:"--api-addr" help:"Address to bind HTTP API server to. API is disabled if empty."`
 	NodeDBPath  string               `ask:"--node-db" help:"Path to dv5 node DB. Memory DB if empty."`
-	Attnets     types.AttnetBits     `ask:"--attnets" help:"Attnet bitfield, as bytes."`
+	Attnets     beacon.AttnetBits    `ask:"--attnets" help:"Attnet bitfield, as bytes."`
 	Bootnodes   []string             `ask:"--bootnodes" help:"Optionally befriend other bootnodes"`
 	ForkVersion beacon.Version       `ask:"--fork-version" help:"Eth2 fork version"`
 	Color       bool                 `ask:"--color" help:"Log with colors"`
@@ -40,6 +43,7 @@ func (b *BootnodeCmd) Default() {
 	b.ListenIP = net.IPv4zero
 	b.Color = true
 	b.Level = "debug"
+	b.APIAddr = "0.0.0.0:8000"
 }
 
 func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
@@ -80,7 +84,7 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 	}
 	localNode.Set(addrutil.NewAttnetsENREntry(&c.Attnets))
 
-	localNode.Set(addrutil.NewEth2DataEntry(&types.Eth2Data{
+	localNode.Set(addrutil.NewEth2DataEntry(&beacon.Eth2Data{
 		ForkDigest:      beacon.ComputeForkDigest(c.ForkVersion, beacon.Root{}),
 		NextForkVersion: c.ForkVersion,
 		NextForkEpoch:   ^beacon.Epoch(0),
@@ -100,6 +104,32 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 	outHandler := log.StreamHandler(os.Stdout, log.TerminalFormat(c.Color))
 	gethLogger.SetHandler(log.LvlFilterHandler(lvl, outHandler))
 
+	// Optional HTTP server, to read the ENR from
+	var srv *http.Server
+	if c.APIAddr != "" {
+		router := http.NewServeMux()
+		srv = &http.Server{
+			Addr:    c.APIAddr,
+			Handler: router,
+		}
+		router.HandleFunc("/enr", func(w http.ResponseWriter, req *http.Request) {
+			gethLogger.Info("received ENR API request", "remote", req.RemoteAddr)
+			w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+			w.WriteHeader(200)
+			enr := localNode.Node().String()
+			if _, err := io.WriteString(w, enr); err != nil {
+				gethLogger.Error("failed to respond to request from", "remote", req.RemoteAddr, "err", err)
+			}
+		})
+
+		go func() {
+			gethLogger.Info("starting API server, ENR reachable on: http://" + srv.Addr + "/enr")
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				gethLogger.Error("API server listen failure", "err", err)
+			}
+		}()
+	}
+
 	cfg := discover.Config{
 		PrivateKey:   ecdsaPrivKey,
 		NetRestrict:  nil,
@@ -114,6 +144,14 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 	}
 	defer udpV5.Close()
 	<-ctx.Done()
+
+	// Close API server
+	if srv != nil {
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Error("Server shutdown failed", "err", err)
+		}
+	}
 	return nil
 }
 
