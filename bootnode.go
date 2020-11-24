@@ -21,18 +21,19 @@ import (
 )
 
 type BootnodeCmd struct {
-	Priv        flags.P2pPrivKeyFlag `ask:"--priv" help:"Private key, in raw hex encoded format"`
-	ENRIP       net.IP               `ask:"--enr-ip" help:"IP to put in ENR"`
-	ENRUDP      uint16               `ask:"--enr-udp" help:"UDP port to put in ENR"`
-	ListenIP    net.IP               `ask:"--listen-ip" help:"Listen IP."`
-	ListenUDP   uint16               `ask:"--listen-udp" help:"Listen UDP port. Will try ENR port otherwise."`
-	APIAddr     string               `ask:"--api-addr" help:"Address to bind HTTP API server to. API is disabled if empty."`
-	NodeDBPath  string               `ask:"--node-db" help:"Path to dv5 node DB. Memory DB if empty."`
-	Attnets     beacon.AttnetBits    `ask:"--attnets" help:"Attnet bitfield, as bytes."`
-	Bootnodes   []string             `ask:"--bootnodes" help:"Optionally befriend other bootnodes"`
-	ForkVersion beacon.Version       `ask:"--fork-version" help:"Eth2 fork version"`
-	Color       bool                 `ask:"--color" help:"Log with colors"`
-	Level       string               `ask:"--level" help:"Log level"`
+	Priv                 flags.P2pPrivKeyFlag `ask:"--priv" help:"Private key, in raw hex encoded format"`
+	ENRIP                net.IP               `ask:"--enr-ip" help:"IP to put in ENR"`
+	ENRUDP               uint16               `ask:"--enr-udp" help:"UDP port to put in ENR"`
+	ListenIP             net.IP               `ask:"--listen-ip" help:"Listen IP."`
+	ListenUDP            uint16               `ask:"--listen-udp" help:"Listen UDP port. Will try ENR port otherwise."`
+	APIAddr              string               `ask:"--api-addr" help:"Address to bind HTTP API server to. API is disabled if empty."`
+	NodeDBPath           string               `ask:"--node-db" help:"Path to dv5 node DB. Memory DB if empty."`
+	Attnets              beacon.AttnetBits    `ask:"--attnets" help:"Attnet bitfield, as bytes."`
+	Bootnodes            []string             `ask:"--bootnodes" help:"Optionally befriend other bootnodes"`
+	ForkVersion          beacon.Version       `ask:"--fork-version" help:"Eth2 fork version"`
+	GenesiValidatorsRoot beacon.Root          `ask:"--genesis-validators-root" help:"Used to compute a nice fork digest, zeroes is acceptable pre-genesis for bootnodes"`
+	Color                bool                 `ask:"--color" help:"Log with colors"`
+	Level                string               `ask:"--level" help:"Log level"`
 }
 
 func (b *BootnodeCmd) Help() string {
@@ -44,6 +45,8 @@ func (b *BootnodeCmd) Default() {
 	b.Color = true
 	b.Level = "debug"
 	b.APIAddr = "0.0.0.0:8000"
+	b.ForkVersion = beacon.Version{}       // zeroes is mainnet
+	b.GenesiValidatorsRoot = beacon.Root{} // zeroes is ok for pre-genesis
 }
 
 func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
@@ -85,7 +88,7 @@ func (c *BootnodeCmd) Run(ctx context.Context, args ...string) error {
 	localNode.Set(addrutil.NewAttnetsENREntry(&c.Attnets))
 
 	localNode.Set(addrutil.NewEth2DataEntry(&beacon.Eth2Data{
-		ForkDigest:      beacon.ComputeForkDigest(c.ForkVersion, beacon.Root{}),
+		ForkDigest:      beacon.ComputeForkDigest(c.ForkVersion, c.GenesiValidatorsRoot),
 		NextForkVersion: c.ForkVersion,
 		NextForkEpoch:   ^beacon.Epoch(0),
 	}))
